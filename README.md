@@ -6,6 +6,7 @@
 Цель практической работы: 
 разработать сервис с запросами POST, GET, PUT, DELETE;
 использовать localhost:8080
+
     1. Сделть обработчик создания пользователя с полями: имя, возраст и массив друзей.
     $ curl -i http://localhost:8080/users -H "content-type: application/json" -d "{\"name\":\"Milli\",\"age\":\"33\",\"friends\":{}}"
     //посмотреть запись в базе по ID : http://localhost:8080/user
