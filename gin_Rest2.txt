@@ -1,0 +1,165 @@
+/*1.  вызов обработчика создания пользователя
+$  curl http://localhost:8080/users/3  --include --header "Content-Type: application/json" --request "POST" --data  `{ID: "3", Name: "Петров", Age: 35, Friends: []string{"Сидоров"}}`
+							{ID: "4", Name: "Петров", Age: 35, Friends: []string{"Сидоров"}}
+$ curl -h "Content-Type: application/json" -d `{id: "3", name: "Петров", age: 35, friends: []string{"Сидоров"}}` http://localhost:8080/users
+
+2. вызов обработчика, который делает друзей из двух пользователей
+
+3. вызов обработчика, который удаляет пользователя
+
+4. вызов обработчика, который возвращает всех друзей пользователя
+
+5. вызов обработчика, который обновляет возраст пользователя
+
+6. вызов обработчик для возврата всех пользователей
+$  curl http://localhost:8000/users
+
+7. вызов обработчика для возврата определенного пользователя
+$  curl http://localhost:8000/users/1
+*/
+// Используется Docker Desktop 4.13.1
+
+package main
+
+import (
+	"encoding/json"
+	_ "encoding/json"
+	"flag"
+	"fmt"
+	"net/http"
+	_ "os"
+
+	"github.com/gin-gonic/gin"
+	
+)
+
+// user представляет данные о пользователе.
+type User struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+	//	Friends []string `json:"friends"`
+}
+
+var user = User{
+	ID: "1", Name: "Иванов", Age: 35,
+}
+
+func initDB() (*gorm.DB, error) {
+	//добавляем код для инициализации подключения к базе данных "gorm"
+	dataSourceName := "host=localhost user=postgres password=1234 dbname=userdb port=8081" //5432"
+	db, err := gorm.Open(postgres.Open(dataSourceName), &gorm.Config{}) //открываем подключение к базе данных
+	db.AutoMigrate(&User{})
+	return db, err
+}
+
+type userHandler struct {
+	db *gorm.DB
+}
+
+func main() {
+	db, err := initDB() //инициализация базы ORM (object Relation Mapper)
+	if err != nil {
+		fmt.Printf("Ошибка инициализации БД: %v\n", err)
+	}
+	uh := userHandler{db: db} //создаем экземпляр структуры и делаем ссылку БД на ее поле "db"
+
+	flag.Parse()
+	router := gin.Default() //маршрутизатор
+	router.SetTrustedProxies([]string{"127.0.0.1"})
+
+	//используем не функции HTTP, а методы "userHandler"
+	router.GET("/users", uh.getUsers)
+	router.GET("/users/:id", uh.getUserByID)
+	router.POST("/users", uh.postUser)
+	//$	curl -X POST -i http://localhost:8080/users -H "content-type: application/json" -d "{\"id\":\"2\", \"name\":\"Milli\",\"age\":33,\"friends\":[\"Billy\"]}"
+
+	fmt.Println("Начать прослушивание 127.0.0.1:8080")
+	router.Run(":8080")
+}
+
+// отвечает списком всех пользователей в формате JSON.
+func (uh userHandler) getUsers(c *gin.Context) { //метод используется для получения запроса JSON
+	users := []User{}
+	if err := uh.db.Find(&users).Error; err != nil {
+		fmt.Println(err)
+		fmt.Println(c, "Ошибка при поиске БД для всех пользователей", http.StatusInternalServerError)
+		return
+	}
+	c.IndentedJSON(http.StatusOK, uh)
+	//	c.Context.JSON(http.StatusOK, users)
+}
+
+// находит пользователя по параметру id,
+// и возвращает этотого пользователя в качестве ответа.
+func (uh userHandler) getUserByID(c *gin.Context) {
+	id := c.Param("id")
+
+	user := User{ID: id}
+	if err := uh.db.First(&user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.IndentedJSON(http.StatusNotFound, gin.H{"Упс": "пользователь не найден"})
+			fmt.Println(c, "Пользователь не найден", http.StatusNotFound)
+			return
+		}
+		fmt.Println(err)
+		fmt.Printf("Ошибка при поиске в БД пользователя с id: %s  %v", id, http.StatusInternalServerError)
+		return
+	}
+	c.IndentedJSON(http.StatusOK, user)
+}
+
+// добавляет пользователя из JSON, полученного в теле запроса.
+func (uh userHandler) postUser(c *gin.Context) {
+	var newUser  User//{}
+
+	// Вызов BindJSON, чтобы связать полученный JSON с newUser.
+	if err := c.BindJSON(&newUser); err != nil { //BindJSON(&var) функция получает JSON и пишет в var
+		return
+	}
+
+	if err := uh.db.Create(&newUser).Error; err != nil {
+		fmt.Println("Ошибка при создании пользователя", http.StatusInternalServerError)
+		return
+	}
+
+	response, err := json.Marshal(&newUser)
+    if err != nil {
+        fmt.Println(err)
+        fmt.Println(c, "Error encoding response object", http.StatusInternalServerError)
+        return
+    }
+	fmt.Println(response)
+	// Добавить нового пользователя в базу.
+	c.IndentedJSON(http.StatusCreated, newUser)
+
+}
+
+/*	ПРИМЕРЫ
+type StructA struct {
+    FieldA string `form:"field_a"`
+}
+type StructB struct {
+    NestedStruct StructA	//поле вложенной структуры StructA
+    FieldB string `form:"field_b"`	поле структуры StructB
+}
+функция Bind(&var) получает из var и пишет в JSON
+func GetDataB(c *gin.Context) {
+    var b StructB
+    c.Bind(&b)
+    c.JSON(200, gin.H{
+        "a": b.NestedStruct, //поля структуры "StructB"
+        "b": b.FieldB,
+    })
+}
+func main() {
+    r := gin.Default() //запуск роутера
+    r.GET("/getb", GetDataB) //обработчик GET
+
+    r.Run(:8000) //слушаем URL
+	запуск $ 	curl "http://localhost:8080/getb?field_a=hello&field_b=world"
+	результат	{"a":{"FieldA":"hello"},"b":"world"}
+}
+
+
+*/
