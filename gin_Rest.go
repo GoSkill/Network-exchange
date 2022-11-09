@@ -43,12 +43,11 @@ var users = []User{
 }
 
 func main() {
-	flag.Parse()
-
+	//flag.Parse()
 	router := gin.Default()
 
 	router.SetTrustedProxies([]string{"127.0.0.1"})
-
+	
 	router.GET("/users", getUsers)
 	router.GET("/users/:id", getUserByID)
 	router.POST("/users", postUsers)
@@ -108,9 +107,6 @@ func GetDataB(c *gin.Context) {
         "b": b.FieldB,
     })
 }
-func main() {
-    r := gin.Default() //запуск роутера
-    r.GET("/getb", GetDataB) //обработчик GET
 
     r.Run(:8000) //слушаем URL
 	запуск $ 	curl "http://localhost:8080/getb?field_a=hello&field_b=world"
@@ -118,4 +114,3 @@ func main() {
 }
 
 
-*/
